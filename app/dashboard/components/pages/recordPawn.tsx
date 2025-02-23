@@ -1,9 +1,45 @@
+"use client";
+
 import React, { useState, useEffect } from "react";
-// import { useState } from "react";
+
+// Constants
+const BASE_URL = "http://127.0.0.1:8000/staff";
+
+// Types and Interfaces
+interface PawnProduct {
+  prod_name: string;
+  pawn_weight: string;
+  pawn_amount: number;
+  pawn_unit_price: number;
+}
+
+interface PawnFormData {
+  pawn_id: number;
+  cus_id: number;
+  cus_name: string;
+  address: string;
+  phone_number: string;
+  pawn_deposit: number;
+  pawn_date: string;
+  pawn_expire_date: string;
+  pawn_product_detail: PawnProduct[];
+}
+
+// Utility Functions
+const getAuthToken = (): string | null => {
+  return localStorage.getItem("access_token");
+};
+
+const handleApiError = (error: unknown): string => {
+  if (typeof error === 'object' && error && 'detail' in error) {
+    return String((error as { detail: string }).detail);
+  }
+  return "Failed to connect to the server.";
+};
 
 export default function RecordPawn() {
-  // Initial form state
-  const initialFormState = {
+  // Initial States
+  const initialFormState: PawnFormData = {
     pawn_id: 0,
     cus_id: 0,
     cus_name: "",
@@ -22,22 +58,16 @@ export default function RecordPawn() {
     ],
   };
 
-  // Form state
-  // const [formData, setFormData] = useState(initialFormState);
+  // State Management
+  const [formData, setFormData] = useState<PawnFormData>(initialFormState);
   const [responseMessage, setResponseMessage] = useState("");
-  // const [nextPawnId, setNextPawnId] = useState(0);  //  Initialize as number
-  const [nextClientId, setNextClientId] = useState(0);  //  Initialize as number
-  // const [phoneNumber, setPhoneNumber] = useState("");  //  This is fine as a string
-  const [phoneNumber, setPhoneNumber] = useState(""); 
-  const [formData, setFormData] = useState(initialFormState);
-  // const [formData, setFormData] = useState(initialFormState);
-  // const [responseMessage, setResponseMessage] = useState("");
-  const [nextPawnId, setNextPawnId] = useState(""); //  Ensure it's a string initially
+  const [nextPawnId, setNextPawnId] = useState("");
+  const [nextClientId, setNextClientId] = useState(0);
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [isEditMode, setIsEditMode] = useState(false);
 
-
-  // Handle input changes for main form fields
-  const handleInputChange = (e) => {
+  // Form Input Handlers
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
@@ -45,313 +75,12 @@ export default function RecordPawn() {
     }));
   };
 
-  const deleteRow = (index) => {
-    setFormData((prev) => ({
-      ...prev,
-      pawn_product_detail: prev.pawn_product_detail.filter((_, i) => i !== index),
-    }));
-  };
-  
-  const fetchCustomerByPhoneNumber = async () => {
-    if (!phoneNumber.trim()) {
-      setResponseMessage("Please enter a phone number to search.");
-      return;
-    }
-  
-    const token = localStorage.getItem("access_token");
-    if (!token) {
-      setResponseMessage("Authentication failed. Please log in.");
-      return;
-    }
-  
-    const url = `http://127.0.0.1:8000/staff/order/client_phone?phone_number=${phoneNumber}`;
-  
-    try {
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-      });
-  
-      if (!response.ok) {
-        setResponseMessage("No records found for this phone number.");
-        return;
-      }
-  
-      const data = await response.json();
-  
-      if (data.code === 200 && data.result.length > 0) {
-        const firstRecord = data.result[0];
-  
-        console.log("Fetched Record:", firstRecord); // 🔥 Debugging Log
-  
-        //  Preserve existing form fields
-        setFormData((prev) => ({
-          ...prev, // Keep existing data like pawn_product_detail
-          cus_id: firstRecord.cus_id ?? 0,
-          cus_name: firstRecord.cus_name ?? "",
-          address: firstRecord.address ?? "",
-        }));
-  
-        setResponseMessage("ស្វែងរកជោគជ័យ");
-      } else {
-        setResponseMessage("មិនមានអតិថិជន");
-      }
-    } catch (error) {
-      console.error("Error fetching customer data:", error);
-      setResponseMessage("Failed to fetch customer details.");
-    }
-  };
-  
-
-
-  const handleEditPawn = async () => {
-    try {
-        const token = localStorage.getItem("access_token");
-
-        if (!formData.pawn_id) {
-            setResponseMessage("Pawn ID is missing. Cannot update.");
-            return;
-        }
-
-        // Ensure each product has a valid `prod_id` or fallback to `prod_name`
-        const formattedProducts = formData.pawn_product_detail.map((product) => ({
-            prod_id: product.prod_id ?? null, // Ensure it's either a valid ID or `null`
-            prod_name: product.prod_name ?? "", // Ensure `prod_name` exists
-            pawn_weight: String(product.pawn_weight), // Ensure weight is a string
-            pawn_amount: Number(product.pawn_amount), // Convert to number
-            pawn_unit_price: Number(product.pawn_unit_price), // Convert to number
-        }));
-
-        const updatePayload = {
-            pawn_id: formData.pawn_id, // Ensure `pawn_id` is included
-            cus_id: formData.cus_id ?? null, // Include `cus_id`
-            customer_name: formData.cus_name ?? "", //  Fix: Rename `cus_name` to `customer_name`
-            address: formData.address ?? "", // Ensure `address` is sent
-            phone_number: formData.phone_number ?? "", // Ensure `phone_number` is sent
-            pawn_deposit: Number(formData.pawn_deposit),
-            pawn_expire_date: formData.pawn_expire_date,
-            products: formattedProducts,
-            deleteOldProducts: true, //  Add this flag to trigger deletion on the backend
-        };
-
-        console.log("🔹 Sending Update Request:", updatePayload); //  Debugging log
-
-        const response = await fetch(
-            `http://127.0.0.1:8000/staff/pawn/${formData.pawn_id}`,
-            {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify(updatePayload),
-            }
-        );
-
-        if (!response.ok) {
-            const errorResponse = await response.json();
-            console.error(" API Error Response:", errorResponse);
-            throw new Error(errorResponse.detail || "Failed to update");
-        }
-
-        const result = await response.json();
-        console.log(" Success:", result);
-
-        setResponseMessage("Pawn record updated successfully! ");
-
-        // Keep edit mode enabled for further updates
-        setIsEditMode(true);
-    } catch (error) {
-        console.error(" Error:", error);
-        setResponseMessage(`Failed to update data: ${error.message}`);
-    }
-};
-  
-
-  const handlePrint = () => {
-    const printWindow = window.open("", "_blank");
-    printWindow.document.write(`
-      <html>
-      <head>
-        <title>វិក្កយបត្រ</title>
-        <style>
-          @page {
-            size: A4;
-            margin: 10mm;
-          }
-          body {
-            font-family: 'Khmer OS Battambang', Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-          }
-          .header-section {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 20px;
-          }
-          .date-section {
-            text-align: right;
-            margin-right: 20px;
-          }
-          .copy-mark {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            border: 1px solid black;
-            padding: 5px;
-          }
-          .invoice-title {
-            text-align: center;
-            font-size: 24px;
-            font-weight: bold;
-            margin: 20px 0;
-          }
-          .customer-info {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            margin-bottom: 20px;
-          }
-          .customer-info div {
-            margin: 5px 0;
-            padding: 5px;
-          }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-          }
-          th, td {
-            border: 1px solid black;
-            padding: 8px;
-            text-align: center;
-          }
-          .total-section {
-            width: 30%;
-            margin-left: auto;
-            margin-right: 0;
-            border-collapse: collapse;
-          }
-          .total-section td {
-            border: 1px solid black;
-            padding: 5px 10px;
-            font-size: 14px;
-          }
-          .total-section td:first-child {
-            text-align: left;
-          }
-          .total-section td:last-child {
-            text-align: right;
-          }
-          .signatures {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 50px;
-            text-align: center;
-          }
-          .signatures div {
-            width: 200px;
-          }
-          @media print {
-            .no-print { display: none; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header-section">
-        <div></div>
-        <div class="date-section">
-          កាលបរិច្ឆេទ៖ ${formData.pawn_date} 
-        </div>
-      </div>
-
-        <div class="invoice-title">
-          វិក្កយបត្រ<br>
-          INVOICE
-        </div>
-
-        <div class="customer-info">
-          <div>លេខអតិថិជន: ${formData.cus_id}</div>
-          <div>ឈ្មោះអតិថិជន:  ${formData.cus_name}</div>
-          <div>លេខទូរស័ព្ទ: ${formData.phone_number}</div>
-        </div>
-
-        <table>
-          <thead>
-            <tr>
-              <th>ល.រ</th>
-              <th>ឈ្មោះទំនិញ</th>
-              <th>ទំងន់</th>
-              <th>ចំនួន</th>
-              <th>តំលៃ</th>
-              <th>សរុបរួម</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${formData.pawn_product_detail.map((product, index) => `
-              <tr>
-                <td>${index + 1}</td>
-                <td>${product.prod_name}</td>
-                <td>${product.pawn_weight}</td>
-                <td>${product.pawn_amount}</td>
-                <td>${product.pawn_unit_price}</td>
-                <td>${(product.pawn_amount * product.pawn_unit_price)}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-
-        <table class="total-section">
-          <tr>
-            <td>សរុប</td>
-            <td>${calculateTotal()}</td>
-          </tr>
-          <tr>
-            <td>កក់មុន</td>
-            <td>${formData.pawn_deposit}</td>
-          </tr>
-          <tr>
-            <td>នៅខ្វះ</td>
-            <td>${calculateTotal() - formData.pawn_deposit}</td>
-          </tr>
-        </table>
-
-        <div class="signatures">
-          <div>
-            ហត្ថលេខាអ្នកទិញ
-          </div>
-          <div>
-            ហត្ថលេខាអ្នកលក់
-          </div>
-        </div>
-
-        <script>
-          window.onload = function() {
-            window.print();
-            window.close();
-          };
-        </script>
-      </body>
-    </html>
-    `);
-    printWindow.document.close();
-  };
-  
-  
-  
-  
-  
-  // Handle changes in product details
-  const handleProductChange = (index, field, value) => {
-    // Remove leading zeros from numeric inputs
+  const handleProductChange = (index: number, field: string, value: string) => {
     let newValue = value;
-  
     if (typeof value === "string") {
       newValue = value.replace(/^0+/, ""); // Remove leading zeros
     }
-  
+
     setFormData((prev) => ({
       ...prev,
       pawn_product_detail: prev.pawn_product_detail.map((product, i) =>
@@ -366,9 +95,8 @@ export default function RecordPawn() {
       ),
     }));
   };
-  
 
-  // Add new product row
+  // Product Management Functions
   const handleAddProduct = () => {
     setFormData((prev) => ({
       ...prev,
@@ -384,195 +112,416 @@ export default function RecordPawn() {
     }));
   };
 
-  // Remove last product row
-  const handleRemoveProduct = () => {
-    if (formData.pawn_product_detail.length > 1) {
-      setFormData((prev) => ({
-        ...prev,
-        pawn_product_detail: prev.pawn_product_detail.slice(0, -1),
-      }));
-    }
+  const deleteRow = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      pawn_product_detail: prev.pawn_product_detail.filter((_, i) => i !== index),
+    }));
   };
 
-  // Calculate total amount
-  const calculateTotal = () => {
+  // Calculation Functions
+  const calculateTotal = (): number => {
     return formData.pawn_product_detail.reduce(
       (sum, product) => sum + (Number(product.pawn_amount) * Number(product.pawn_unit_price) || 0),
       0
     );
   };
-  
-  const handleSubmit = async () => {
-    try {
-        const token = localStorage.getItem("access_token");
 
-        if (!token) {
-            setResponseMessage("Authentication failed. Please log in.");
-            return;
-        }
-
-        let pawnIdToUse = nextPawnId; // ✅ Use current state first
-
-        // ✅ Ensure we have a valid Pawn ID before submitting
-        if (!pawnIdToUse) {
-            console.log("Fetching next pawn ID before submission...");
-            await fetchNextPawnId(); // ✅ Fetches next pawn ID
-            pawnIdToUse = nextPawnId; // ✅ Retrieve updated value
-        }
-
-        if (!pawnIdToUse) {
-            setResponseMessage("Failed to retrieve a valid Pawn ID.");
-            return;
-        }
-
-        // ✅ Ensure `formData` is updated with the correct Pawn ID
-        const updatedFormData = {
-            ...formData,
-            pawn_id: pawnIdToUse, // ✅ Use the correct pawn ID
-        };
-
-        console.log("🔹 Submitting Pawn Record with ID:", pawnIdToUse);
-
-        const response = await fetch("http://127.0.0.1:8000/staff/pawn", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(updatedFormData), // ✅ Send updated pawn_id in payload
-        });
-
-        const result = await response.json();
-        console.log("Success:", result);
-
-        if (!response.ok) {
-            if (response.status === 400 && result.detail.includes("already exists")) {
-                setResponseMessage(`Pawn ID ${pawnIdToUse} already exists.`);
-                console.log(`Pawn ID ${pawnIdToUse} already exists. Submission blocked.`);
-                return;
-            }
-            throw new Error(result.detail || "Failed to submit");
-        }
-
-        setResponseMessage(`Pawn record successfully created! (Pawn ID: ${pawnIdToUse})`);
-
-    } catch (error) {
-        console.error("Error:", error);
-        setResponseMessage(`Failed to submit data: ${error.message}`);
+  // API Functions
+  const fetchCustomerByPhoneNumber = async () => {
+    if (!phoneNumber.trim()) {
+      setResponseMessage("Please enter a phone number to search.");
+      return;
     }
-};
 
+    const token = getAuthToken();
+    if (!token) {
+      setResponseMessage("Authentication failed. Please log in.");
+      return;
+    }
 
-
-  
-  const fetchNextPawnId = async () => {
     try {
-        console.log("Fetching next pawn ID...");
-        const token = localStorage.getItem("access_token");
-        if (!token) {
-            console.error("No authentication token found. User may not be logged in.");
-            return;
-        }
+      const response = await fetch(`${BASE_URL}/order/client_phone?phone_number=${phoneNumber}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+      });
 
-        const response = await fetch("http://localhost:8000/staff/next-pawn-id", {
-            method: "GET",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`,
-            },
-        });
+      if (!response.ok) {
+        setResponseMessage("No records found for this phone number.");
+        return;
+      }
 
-        const data = await response.json(); // Convert response to JSON
+      const data = await response.json();
 
-        if (!response.ok || !data.result || typeof data.result.id !== "number") {
-            console.error("Invalid response format for next_pawn_id:", data);
-            return;
-        }
-
-        setNextPawnId(data.result.id);
-        console.log("Extracted Next Pawn ID:", data.result.id);
+      if (data.code === 200 && data.result.length > 0) {
+        const firstRecord = data.result[0];
+        setFormData((prev) => ({
+          ...prev,
+          cus_id: firstRecord.cus_id ?? 0,
+          cus_name: firstRecord.cus_name ?? "",
+          address: firstRecord.address ?? "",
+        }));
+        setResponseMessage("ស្វែងរកជោគជ័យ");
+      } else {
+        setResponseMessage("មិនមានអតិថិជន");
+      }
     } catch (error) {
-        console.error("Error fetching next pawn ID:", error);
+      console.error("Error fetching customer data:", error);
+      setResponseMessage(handleApiError(error));
     }
   };
 
+  const fetchNextPawnId = async () => {
+    try {
+      const token = getAuthToken();
+      if (!token) {
+        console.error("No authentication token found.");
+        return;
+      }
+
+      const response = await fetch(`${BASE_URL}/next-pawn-id`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.result || typeof data.result.id !== "number") {
+        console.error("Invalid response format for next_pawn_id:", data);
+        return;
+      }
+
+      setNextPawnId(data.result.id);
+    } catch (error) {
+      console.error("Error fetching next pawn ID:", error);
+    }
+  };
 
   const fetchNextClientId = async () => {
     try {
-        console.log("Fetching next client ID...");
-        const token = localStorage.getItem("access_token");
-        if (!token) {
-            console.error("No authentication token found. User may not be logged in.");
-            return;
-        }
+      const token = getAuthToken();
+      if (!token) {
+        console.error("No authentication token found.");
+        return;
+      }
 
-        const response = await fetch("http://127.0.0.1:8000/staff/next-client-id", {
-            method: "GET",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`,
-            },
-        });
+      const response = await fetch(`${BASE_URL}/next-client-id`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+      });
 
-        const data = await response.json(); //  Convert response to JSON
+      const data = await response.json();
+      if (!response.ok || !data.result || typeof data.result.id !== "number") {
+        console.error("Invalid response format for next_client_id:", data);
+        return;
+      }
 
-        if (!response.ok || !data.result || typeof data.result.id !== "number") {
-            console.error(" Invalid response format for next_client_id:", data);
-            return;
-        }
-
-        setNextClientId(data.result.id);  //  Update state properly
-        console.log(" Extracted Next Client ID:", data.result.id);
+      setNextClientId(data.result.id);
     } catch (error) {
-        console.error(" Error fetching next client ID:", error);
+      console.error("Error fetching next client ID:", error);
     }
-};
+  };
 
+  // Form Submission Handlers
+  const handleSubmit = async () => {
+    try {
+      const token = getAuthToken();
+      if (!token) {
+        setResponseMessage("Authentication failed. Please log in.");
+        return;
+      }
 
+      let pawnIdToUse = nextPawnId;
+      if (!pawnIdToUse) {
+        await fetchNextPawnId();
+        pawnIdToUse = nextPawnId;
+      }
 
+      if (!pawnIdToUse) {
+        setResponseMessage("Failed to retrieve a valid Pawn ID.");
+        return;
+      }
 
+      const updatedFormData = {
+        ...formData,
+        pawn_id: pawnIdToUse,
+      };
 
-  useEffect(() => {
-    console.log("Fetching Next Pawn and Client ID...");
-    fetchNextPawnId();
-    fetchNextClientId();  //  Ensure this is called
-  }, []);
+      const response = await fetch(`${BASE_URL}/pawn`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify(updatedFormData),
+      });
 
-  // Reset form
+      const result = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 400 && result.detail.includes("already exists")) {
+          setResponseMessage(`Pawn ID ${pawnIdToUse} already exists.`);
+          return;
+        }
+        throw new Error(result.detail || "Failed to submit");
+      }
+
+      setResponseMessage(`Pawn record successfully created! (Pawn ID: ${pawnIdToUse})`);
+    } catch (error) {
+      console.error("Error:", error);
+      setResponseMessage(handleApiError(error));
+    }
+  };
+
+  const handleEditPawn = async () => {
+    try {
+      const token = getAuthToken();
+      if (!token) {
+        setResponseMessage("Authentication failed. Please log in.");
+        return;
+      }
+
+      if (!formData.pawn_id) {
+        setResponseMessage("Pawn ID is missing. Cannot update.");
+        return;
+      }
+
+      const formattedProducts = formData.pawn_product_detail.map((product) => ({
+        prod_id: product.prod_id ?? null,
+        prod_name: product.prod_name ?? "",
+        pawn_weight: String(product.pawn_weight),
+        pawn_amount: Number(product.pawn_amount),
+        pawn_unit_price: Number(product.pawn_unit_price),
+      }));
+
+      const updatePayload = {
+        pawn_id: formData.pawn_id,
+        cus_id: formData.cus_id ?? null,
+        customer_name: formData.cus_name ?? "",
+        address: formData.address ?? "",
+        phone_number: formData.phone_number ?? "",
+        pawn_deposit: Number(formData.pawn_deposit),
+        pawn_expire_date: formData.pawn_expire_date,
+        products: formattedProducts,
+        deleteOldProducts: true,
+      };
+
+      const response = await fetch(`${BASE_URL}/pawn/${formData.pawn_id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify(updatePayload),
+      });
+
+      if (!response.ok) {
+        const errorResponse = await response.json();
+        throw new Error(errorResponse.detail || "Failed to update");
+      }
+
+      setResponseMessage("Pawn record updated successfully!");
+      setIsEditMode(true);
+    } catch (error) {
+      console.error("Error:", error);
+      setResponseMessage(handleApiError(error));
+    }
+  };
+
+  // Print Functions
+  const handlePrint = async () => {
+    const pawnId = nextPawnId;
+    try {
+      const response = await fetch(`${BASE_URL}/pawn/print?pawn_id=${pawnId}`);
+      const result = await response.json();
+
+      if (result.code !== 200 || !result.result.length) {
+        setResponseMessage("No pawn data found for the provided ID.");
+        return;
+      }
+
+      const pawnData = result.result[0];
+      const pawnDetails = pawnData.pawns[0];
+
+      const printWindow = window.open("", "_blank");
+      if (!printWindow) {
+        setResponseMessage("Failed to open print window.");
+        return;
+      }
+
+      printWindow.document.write(generateInvoiceHTML(pawnData, pawnDetails));
+      printWindow.document.close();
+    } catch (error) {
+      console.error("Error fetching pawn data:", error);
+      setResponseMessage("An error occurred while fetching pawn data.");
+    }
+  };
+
+  const generateInvoiceHTML = (pawnData: any, pawnDetails: any) => {
+    return `
+      <html>
+        <head>
+          <title>វិក្កយបត្រ</title>
+          <style>
+            @page { size: A4; margin: 10mm; }
+            body {
+              font-family: 'Khmer OS Battambang', Arial, sans-serif;
+              margin: 0;
+              padding: 20px;
+            }
+            .header-section {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 20px;
+            }
+            .date-section { text-align: right; margin-right: 20px; }
+            .invoice-title {
+              text-align: center;
+              font-size: 24px;
+              font-weight: bold;
+              margin: 20px 0;
+            }
+            .customer-info {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              margin-bottom: 20px;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-bottom: 20px;
+            }
+            th, td {
+              border: 1px solid black;
+              padding: 8px;
+              text-align: center;
+            }
+            .total-section {
+              width: 30%;
+              margin-left: auto;
+              border-collapse: collapse;
+            }
+            .signatures {
+              display: flex;
+              justify-content: space-between;
+              margin-top: 50px;
+              text-align: center;
+            }
+            @media print { .no-print { display: none; } }
+          </style>
+        </head>
+        <body>
+          <div class="header-section">
+            <div></div>
+            <div class="date-section">កាលបរិច្ឆេទ៖ ${pawnDetails.pawn_date}</div>
+            <div class="pawn-id-section">លេខ៖ ${pawnDetails.pawn_id}</div>
+          </div>
+
+          <div class="invoice-title">
+            វិក្កយបត្រ<br>
+            INVOICE
+          </div>
+
+          <div class="customer-info">
+            <div>លេខអតិថិជន: ${pawnData.cus_id}</div>
+            <div>ឈ្មោះអតិថិជន: ${pawnData.customer_name}</div>
+            <div>លេខទូរស័ព្ទ: ${pawnData.phone_number}</div>
+            <div>អាសយដ្ឋាន: ${pawnData.address}</div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>ល.រ</th>
+                <th>ឈ្មោះទំនិញ</th>
+                <th>ទំងន់</th>
+                <th>ចំនួន</th>
+                <th>តំលៃ</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${pawnData.pawns.flatMap((pawn: any, pawnIndex: number) => 
+                pawn.products.map((product: any, index: number) => `
+                  <tr>
+                    <td>${pawnIndex + index + 1}</td>
+                    <td>${product.prod_name}</td>
+                    <td>${product.pawn_weight}</td>
+                    <td>${product.pawn_amount}</td>
+                    <td>${product.pawn_unit_price}</td>
+                  </tr>
+                `)
+              ).join('')}
+            </tbody>
+          </table>
+
+          <table class="total-section">
+            <tr>
+              <td>សរុប</td>
+              <td>${calculateTotal()}</td>
+            </tr>
+            <tr>
+              <td>កក់មុន</td>
+              <td>${pawnDetails.pawn_deposit}</td>
+            </tr>
+            <tr>
+              <td>នៅខ្វះ</td>
+              <td>${calculateTotal() - pawnDetails.pawn_deposit}</td>
+            </tr>
+          </table>
+
+          <div class="signatures">
+            <div>ហត្ថលេខាអ្នកទិញ</div>
+            <div>ហត្ថលេខាអ្នកលក់</div>
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+              window.close();
+            };
+          </script>
+        </body>
+      </html>
+    `;
+  };
+
+  // Reset Functions
   const handleReset = async () => {
-    console.log("⏳ Resetting form...");
-    
-    setPhoneNumber(""); // Reset separate phoneNumber state
-    setFormData(initialFormState); //  Reset entire form to initial state
+    setPhoneNumber("");
+    setFormData(initialFormState);
     
     try {
-      //  Fetch and set the next Client ID
       const newClientId = await fetchNextClientId();
       if (newClientId) {
         setFormData((prev) => ({ ...prev, cus_id: newClientId }));
-        console.log(" Updated Client ID:", newClientId);
-      } else {
-        console.warn("⚠️ No new Client ID fetched.");
       }
-  
-      //  Fetch and set the next Pawn ID
+
       const newPawnId = await fetchNextPawnId();
       if (newPawnId) {
         setFormData((prev) => ({ ...prev, pawn_id: newPawnId }));
-        console.log(" Updated Pawn ID:", newPawnId);
-      } else {
-        console.warn("⚠️ No new Pawn ID fetched.");
       }
-  
     } catch (error) {
       console.error("Error fetching next IDs:", error);
     }
   };
-  
-  
+
+  // Initialize Component
+  useEffect(() => {
+    fetchNextPawnId();
+    fetchNextClientId();
+  }, []);
 
   return (
     <section id="record_pawn" className="p-6">
+      <h1 className="text-2xl font-bold mb-6">កត់ត្រាការបញ្ជាំ</h1>
       <div className="container mx-auto flex flex-wrap gap-6">
         {/* Left Section */}
         <div className="w-2/6 bg-white p-6 rounded-lg shadow-md">
@@ -589,7 +538,6 @@ export default function RecordPawn() {
                 readOnly
                 className="w-full border border-gray-300 p-2 rounded bg-gray-50"
             />
-
 
             </div>
             <div className="form-group">
@@ -612,13 +560,13 @@ export default function RecordPawn() {
               <input
                 type="text"
                 id="phone"
-                value={phoneNumber} //  Keep tracking with `phoneNumber` state
+                value={phoneNumber}
                 onChange={(e) => {
                   const newPhoneNumber = e.target.value;
-                  setPhoneNumber(newPhoneNumber); //  Update phone number separately
+                  setPhoneNumber(newPhoneNumber);
                   setFormData((prev) => ({
                     ...prev,
-                    phone_number: newPhoneNumber, //  Update inside `formData`
+                    phone_number: newPhoneNumber,
                   }));
                 }}
                 className="w-full border border-gray-300 p-2 rounded"
@@ -743,8 +691,8 @@ export default function RecordPawn() {
       <tr>
         <th className="border border-gray-300 p-2">ឈ្មោះ</th>
         <th className="border border-gray-300 p-2">ទំងន់</th>
-        <th className="border border-gray-300 p-2">តំលៃបញ្ចាំ</th>
         <th className="border border-gray-300 p-2">ចំនួន</th>
+        <th className="border border-gray-300 p-2">តំលៃបញ្ចាំ</th>
         <th className="border border-gray-300 p-2"></th>
       </tr>
     </thead>

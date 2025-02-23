@@ -47,7 +47,7 @@ export default function Navbar({
       }`}
       style={{ width: `${sidebarWidth}px` }}
     >
-      <h2 className="text-xl font-bold p-4">Navigation</h2>
+      <h2 className="text-xl font-bold p-4">ML HENG MOUYLY SHOP</h2>
       <ul className="space-y-2 p-4">
         <li>
           <button
