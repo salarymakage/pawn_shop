@@ -378,11 +378,38 @@ export default function RecordPawn() {
               padding: 20px;
             }
             .header-section {
-              display: flex;
-              justify-content: space-between;
-              margin-bottom: 20px;
-            }
-            .date-section { text-align: right; margin-right: 20px; }
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+          }
+
+          .logo-section {
+            padding-left: 1px;
+          }
+
+          .logo {
+            margin-top: 25px;
+            max-height: 100px;
+            width: auto;
+          }
+          .date-id-section {
+            text-align: right;
+            margin-right: 20px;
+            display: flex;
+            flex-direction: column;  /* Stack vertically */
+            gap: 5px;  /* Space between date and ID */
+          }
+
+          .date-section {
+            
+            font-size: 14px;
+          }
+
+          .pawn-id-section {
+            font-size: 14px;
+            
+          }
             .invoice-title {
               text-align: center;
               font-size: 24px;
@@ -420,9 +447,17 @@ export default function RecordPawn() {
         </head>
         <body>
           <div class="header-section">
-            <div></div>
-            <div class="date-section">កាលបរិច្ឆេទ៖ ${pawnDetails.pawn_date}</div>
-            <div class="pawn-id-section">លេខ៖ ${pawnDetails.pawn_id}</div>
+            <div class="logo-section">
+              <img src="/logo.png"  alt="Company Logo" class="logo">
+            </div>
+            <div class="date-id-section">
+              <div class="date-section">
+                កាលបរិច្ឆេទ៖ ${pawnDetails.pawn_date}
+              </div>
+              <div class="pawn-id-section">
+                លេខវិក្កយបត្រ៖ ${pawnDetails.pawn_id}
+              </div>
+            </div>
           </div>
 
           <div class="invoice-title">
@@ -686,66 +721,74 @@ export default function RecordPawn() {
           <div className="w-full overflow-auto max-h-60 border border-gray-300 mt-4"
           style={{ scrollbarGutter: "stable" }}
           >
-  <table className="w-full border-collapse">
-    <thead className="sticky top-0 bg-orange-500 text-white">
-      <tr>
-        <th className="border border-gray-300 p-2">ឈ្មោះ</th>
-        <th className="border border-gray-300 p-2">ទំងន់</th>
-        <th className="border border-gray-300 p-2">ចំនួន</th>
-        <th className="border border-gray-300 p-2">តំលៃបញ្ចាំ</th>
-        <th className="border border-gray-300 p-2"></th>
-      </tr>
-    </thead>
-    <tbody>
-      {formData.pawn_product_detail.map((product, index) => (
-        <tr key={index} className="bg-white">
-          <td className="border border-gray-300 p-2">
-            <input
-              type="text"
-              value={product.prod_name}
-              onChange={(e) => handleProductChange(index, "prod_name", e.target.value)}
-              className="w-full p-1 bg-transparent border-none focus:outline-none focus:ring-0"
-              placeholder="ឈ្មោះ"
-            />
-          </td>
-          <td className="border border-gray-300 p-2">
-            <input
-              type="text"
-              value={product.pawn_weight}
-              onChange={(e) => handleProductChange(index, "pawn_weight", e.target.value)}
-              className="w-full p-1 bg-transparent border-none focus:outline-none focus:ring-0"
-              placeholder="0"
-            />
-          </td>
-          <td className="border border-gray-300 p-2">
-            <input
-              type="number"
-              value={product.pawn_amount}
-              onChange={(e) => handleProductChange(index, "pawn_amount", e.target.value)}
-              className="w-full p-1 bg-transparent border-none focus:outline-none focus:ring-0"
-            />
-          </td>
-          <td className="border border-gray-300 p-2">
-            <input
-              type="number"
-              value={product.pawn_unit_price}
-              onChange={(e) => handleProductChange(index, "pawn_unit_price", e.target.value)}
-              className="w-full p-1 bg-transpare nt border-none focus:outline-none focus:ring-0"
-            />
-          </td>
-          <td className="border border-gray-300 p-2 text-center">
-            <button
-              onClick={() => deleteRow(index)}
-              className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
-            >
-              លុប
-            </button>
-          </td>
-        </tr>
-      ))}
-    </tbody>
-  </table>
-</div>
+            <table className="w-full border-collapse">
+              <thead className="sticky top-0 bg-orange-500 text-white">
+                <tr>
+                  <th className="border border-gray-300 p-2">ឈ្មោះ</th>
+                  <th className="border border-gray-300 p-2">ទំងន់</th>
+                  <th className="border border-gray-300 p-2">ចំនួន</th>
+                  <th className="border border-gray-300 p-2">តំលៃបញ្ចាំ</th>
+                  <th className="border border-gray-300 p-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+            {formData.pawn_product_detail.map((product, index) => (
+              <tr key={index} className="bg-white">
+                <td className="border border-gray-300 p-2">
+                  <input
+                    type="text"
+                    value={product.prod_name}
+                    onChange={(e) => handleProductChange(index, "prod_name", e.target.value)}
+                    className="w-full p-1 bg-transparent border-none focus:outline-none focus:ring-0"
+                    placeholder="ឈ្មោះ"
+                  />
+                </td>
+                <td className="border border-gray-300 p-2">
+                  <input
+                    type="text"
+                    value={product.pawn_weight}
+                    onChange={(e) => handleProductChange(index, "pawn_weight", e.target.value)}
+                    className="w-full p-1 bg-transparent border-none focus:outline-none focus:ring-0"
+                    placeholder="0"
+                  />
+                </td>
+                <td className="border border-gray-300 p-2">
+                  <input
+                    type="number"
+                    value={product.pawn_amount === 0 ? "" : product.pawn_amount}
+                    onChange={(e) => {
+                      const value = e.target.value === "" ? 0 : parseFloat(e.target.value);
+                      handleProductChange(index, "pawn_amount", value);
+                    }}
+                    className="w-full p-1 bg-transparent border-none focus:outline-none focus:ring-0"
+                    placeholder="0"
+                  />
+                </td>
+                <td className="border border-gray-300 p-2">
+                  <input
+                    type="number"
+                    value={product.pawn_unit_price === 0 ? "" : product.pawn_unit_price}
+                    onChange={(e) => {
+                      const value = e.target.value === "" ? 0 : parseFloat(e.target.value);
+                      handleProductChange(index, "pawn_unit_price", value);
+                    }}
+                    className="w-full p-1 bg-transparent border-none focus:outline-none focus:ring-0"
+                    placeholder="0"
+                  />
+                </td>
+                <td className="border border-gray-300 p-2 text-center">
+                  <button
+                    onClick={() => deleteRow(index)}
+                    className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
+                  >
+                    លុប
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+            </table>
+          </div>
           {/* Summary Section */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
             <div className="form-group">
@@ -766,9 +809,10 @@ export default function RecordPawn() {
               <input
                 type="number"
                 name="pawn_deposit"
-                value={formData.pawn_deposit}
+                value={formData.pawn_deposit === 0 ? "" : formData.pawn_deposit}
                 onChange={handleInputChange}
                 className="w-full border border-gray-300 p-2 rounded"
+                placeholder="0"
               />
             </div>
           </div>

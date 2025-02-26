@@ -219,10 +219,10 @@ export default function DisplayOrders() {
           }
 
           .logo {
-            max-height: 50px;
+            margin-top: 25px;
+            max-height: 100px;
             width: auto;
           }
-
           .date-id-section {
             display: flex;
             flex-direction: column;   

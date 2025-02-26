@@ -1,9 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import Image from 'next/image';
-
-// Types and Interfaces
 interface ProductDetail {
   customer_id: number;
   prod_id: number;
@@ -15,98 +12,8 @@ interface ProductDetail {
   product_buy_price: number;
 }
 
-interface Order {
-  order_date: string;
-  order_deposit: number;
-  product: {
-    prod_name: string;
-    order_weight: string;
-    order_amount: number;
-    product_sell_price: number;
-    product_labor_cost: number;
-    product_buy_price: number;
-  };
-}
-
-interface OrderResponse {
-  cus_id: string;
-  customer_name: string;
-  phone_number: string;
-  address: string;
-  orders: Order[];
-}
-
-// Constants
-const BASE_URL = "http://127.0.0.1:8000/staff";
-
-// Utility Functions
-const getAuthToken = (): string | null => {
-  return localStorage.getItem("access_token");
-};
-
-const handleApiError = (error: unknown): string => {
-  if (typeof error === 'object' && error && 'detail' in error) {
-    return String((error as { detail: string }).detail);
-  }
-  return "Failed to connect to the server.";
-};
-
-const calculateTotal = (orders: Order[]): number => {
-  if (!Array.isArray(orders) || orders.length === 0) {
-    return 0;
-  }
-  return orders.reduce((total, orderItem) => 
-    total + (orderItem.product.order_amount * orderItem.product.product_sell_price) + orderItem.product.product_labor_cost, 0
-  );
-};
-
-// API Service
-const apiService = {
-  async fetchNextClientId(token: string): Promise<string | null> {
-    try {
-      const response = await fetch(`${BASE_URL}/next-client-id`, {
-        headers: { "Authorization": `Bearer ${token}` },
-      });
-      if (!response.ok) return null;
-      const data = await response.json();
-      return data?.result?.id;
-    } catch (error) {
-      console.error("Error fetching next client ID:", error);
-      return null;
-    }
-  },
-
-  async fetchNextOrderId(token: string): Promise<number | null> {
-    try {
-      const response = await fetch(`${BASE_URL}/next-order-id`, {
-        headers: { "Authorization": `Bearer ${token}` },
-      });
-      if (!response.ok) return null;
-      const data = await response.json();
-      return data?.result?.id;
-    } catch (error) {
-      console.error("Error fetching next order ID:", error);
-      return null;
-    }
-  },
-
-  async fetchOrderDetails(orderId: number, token: string): Promise<OrderResponse | null> {
-    try {
-      const response = await fetch(`${BASE_URL}/orders/print?order_id=${orderId}`, {
-        headers: { "Authorization": `Bearer ${token}` },
-      });
-      if (!response.ok) return null;
-      const data = await response.json();
-      return data.result[0];
-    } catch (error) {
-      console.error("Error fetching order details:", error);
-      return null;
-    }
-  }
-};
 
 export default function BuySellRecord() {
-  // State Management
   const [cusName, setCusName] = useState("");
   const [address, setAddress] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -114,14 +21,16 @@ export default function BuySellRecord() {
   const [orderDate, setOrderDate] = useState("");
   const [orderDeposit, setOrderDeposit] = useState<number>(0);
   const [lastOrderId, setLastOrderId] = useState<number | null>(null);
-  const [orderHistory, setOrderHistory] = useState<Order[]>([]);
+
   const [isEditing, setIsEditing] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  // const idToSubmit = (customerId ? String(customerId).trim() : "") || nextClientId;
+
 
   const [orderProductDetail, setOrderProductDetail] = useState<ProductDetail[]>([
     {
-      customer_id: 0,
+      customer_id:0,
       prod_id: 0,
       prod_name: "",
       order_weight: "",
@@ -131,252 +40,403 @@ export default function BuySellRecord() {
       product_buy_price: 0,
     },
   ]);
-  
   const [responseMessage, setResponseMessage] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [nextClientId, setNextClientId] = useState("");
-  const [orderId, setOrderId] = useState<number | null>(null);
+  const [orderId, setOrderId] = useState<number | null>(null); 
+
+  // const [cusID, setCusID] = useState("");
   const [orderToPrint, setOrderToPrint] = useState(null);
 
-  // Form Handling
-  const formHandlers = {
-    addProduct: () => {
-      setOrderProductDetail((prev) => [
-        ...prev,
-        {
-          customer_id: 0,
-          prod_id: 0,
-          prod_name: "",
-          order_weight: "",
-          order_amount: 0,
-          product_sell_price: 0,
-          product_labor_cost: 0,
-          product_buy_price: 0,
-        },
-      ]);
-    },
-
-    deleteRow: (index: number) => {
-      setOrderProductDetail((prev) => prev.filter((_, i) => i !== index));
-    },
-
-    resetForm: () => {
-      setCusName("");
-      setAddress("");
-      setPhoneNumber("");
-      setInvoiceNumber("");
-      setOrderDate("");
-      setOrderDeposit(0);
-      setCustomerName("");
-      setOrderProductDetail([
-        {
-          customer_id: 0,
-          prod_id: 0,
-          prod_name: "",
-          order_weight: "",
-          order_amount: 0,
-          product_sell_price: 0,
-          product_labor_cost: 0,
-          product_buy_price: 0,
-        },
-      ]);
-    },
-
-    calculateTotalPrice: (): number => {
-      return orderProductDetail.reduce((total, product) => {
-        return total + product.product_labor_cost + product.order_amount * product.product_sell_price;
-      }, 0);
-    }
-  };
-
-  // Invoice Generation
-  const invoiceHandlers = {
-    generateInvoice: (order: OrderResponse, orderId: number) => {
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        setResponseMessage("Failed to open print window");
+  const handlePrint = async (orderId) => {
+    if (!orderId || isNaN(orderId)) {
+        setResponseMessage("Please enter a valid Order ID.");
         return;
-      }
+    }
 
-      printWindow.document.write(invoiceHandlers.generateInvoiceHTML(order, orderId));
-      printWindow.document.close();
-      printWindow.print();
-    },
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+        setResponseMessage("Authentication failed. Please log in.");
+        return;
+    }
 
-    generateInvoiceHTML: (order: OrderResponse, orderId: number) => {
-      const { cus_id: customerId, customer_name: customerName, phone_number: phoneNumber, address, orders } = order;
+    try {
+        console.log(`Fetching order data for Order ID: ${orderId}...`);
 
-      if (!Array.isArray(orders) || orders.length === 0) {
-        setResponseMessage("No order details found.");
-        return "";
-      }
+        // ✅ Fetch order details from the backend API
+        const response = await fetch(`http://localhost:8000/staff/orders/print?order_id=${orderId}`, {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`,
+            },
+        });
 
-      return `
+        if (!response.ok) {
+            setResponseMessage("Order not found.");
+            return;
+        }
+
+        const orderData = await response.json();
+        console.log("Fetched Order Data:", orderData);
+
+        if (!orderData.result || orderData.result.length === 0) {
+            setResponseMessage("No order details found.");
+            return;
+        }
+
+        const order = orderData.result[0];
+
+        // ✅ Extract Order Details
+        const {
+            cus_id: customerId,
+            customer_name: customerName,
+            phone_number: phoneNumber,
+            address,
+            orders,
+        } = order;
+
+        // ✅ Ensure orders exist and are an array
+        if (!Array.isArray(orders) || orders.length === 0) {
+            setResponseMessage("No order details found.");
+            return;
+        }
+
+        // ✅ Generate Invoice
+        const printWindow = window.open("", "_blank");
+        printWindow.document.write(`
         <html>
-          <head>
-            <style>
-              body {
-                font-family: 'Khmer OS', Arial, sans-serif;
-                margin: 0;
-                padding: 20px;
-              }
-              .invoice-header {
-                text-align: center;
-                margin-bottom: 20px;
-              }
-              .logo-section {
-                margin-bottom: 10px;
-              }
-              .logo {
-                max-width: 150px;
-              }
-              .company-name {
-                font-size: 24px;
-                font-weight: bold;
-                margin: 10px 0;
-              }
-              .contact-info {
-                font-size: 14px;
-                margin: 5px 0;
-              }
-              .customer-details {
-                margin: 20px 0;
-              }
-              .customer-row {
-                margin: 5px 0;
-              }
-              table {
-                width: 100%;
-                border-collapse: collapse;
-                margin: 20px 0;
-              }
-              th, td {
-                border: 1px solid #ddd;
-                padding: 8px;
-                text-align: left;
-              }
-              th {
-                background-color: #f5f5f5;
-              }
-              .total-section {
-                margin-top: 20px;
-                text-align: right;
-              }
-              .signatures {
-                margin-top: 50px;
-                display: flex;
-                justify-content: space-between;
-              }
-              .signature-box {
-                text-align: center;
-                width: 200px;
-              }
-              .signature-line {
-                border-top: 1px solid #000;
-                margin-top: 50px;
-              }
-              @media print {
-                body {
-                  padding: 0;
-                  margin: 0;
-                }
-                .no-print {
-                  display: none;
-                }
-              }
-            </style>
-          </head>
-          <body>
-            <div class="invoice-header">
-              <div class="logo-section">
-                <img src="/logo.png" alt="Company Logo" class="logo">
-              </div>
-              <div class="date-id-section">
-                <div class="date-section">កាលបរិច្ឆេទ៖ ${orders[0].order_date}</div>
-                <div class="id-section">លេខវិក្កយបត្រ៖ ${orderId}</div>
-              </div>
-            </div>
+        <head>
+          <title>វិក្កយបត្រ: ${orderId}</title>
+          <style>
+              @page { size: A4; margin: 10mm; }
+          body { font-family: 'Khmer OS Battambang', Arial, sans-serif; padding: 20px; }
+          .header-section {
+            display: flex;
+            justify-content: space-between; 
+            align-items: center;
+            margin-bottom: 20px;
+            padding-right: 20px;    
+          }
 
-            <div class="customer-details">
-              <div class="customer-row">ឈ្មោះអតិថិជន៖ ${customerName}</div>
-              <div class="customer-row">លេខទូរស័ព្ទ៖ ${phoneNumber}</div>
-              <div class="customer-row">អាសយដ្ឋាន៖ ${address}</div>
-            </div>
+          .logo-section {
+            padding-left: 1px;
+          }
 
-            <table>
-              <thead>
+          .logo {
+            margin-top: 25px;
+            max-height: 100px;
+            width: auto;
+          }
+          .date-id-section {
+            display: flex;
+            flex-direction: column;   
+            text-align: right;        
+            gap: 5px;                 
+          }
+
+          .date-section {
+            
+            font-size: 14px;
+          }
+
+          .id-section {
+            font-size: 14px;
+         
+          }
+                                                    
+          .invoice-title { text-align: center; font-size: 24px; font-weight: bold; margin: 20px 0; }
+          .customer-info { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 20px; }
+          .customer-info div { padding: 5px 0; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+          th, td { border: 1px solid black; padding: 8px; text-align: center; }
+          .total-section { width: 30%; margin-left: auto; border-collapse: collapse; }
+          .total-section tr { height: 30px; }
+          .total-section td { border: 1px solid black; padding: 5px 10px; font-size: 14px; }
+          .total-section td:first-child { text-align: left; width: 40%; }
+          .total-section td:last-child { text-align: right; width: 60%; }
+          .signatures { display: flex; justify-content: space-between; margin-top: 50px; text-align: center; }
+          .signatures div { width: 200px; }
+          </style>
+        </head>
+        <body>
+
+           <div class="header-section">
+            <div class="logo-section">
+              <img src="/logo.png" alt="Company Logo" class="logo">
+            </div>
+            <div class="date-id-section">
+              <div class="date-section">កាលបរិច្ឆេទ៖ ${orders[0].order_date}</div>
+              <div class="id-section">លេខវិក្កយបត្រ៖ ${orderId}</div>
+            </div>
+          </div>
+
+
+          <div class="invoice-title">វិក្កយបត្រ<br>INVOICE</div>
+
+          <div class="customer-info">
+            <div>
+              <div>លេខអតិថិជន៖ ${customerId}</div>
+              <div>លេខទូរស័ព្ទ៖ ${phoneNumber}</div>
+              <div>អាសយដ្ឋាន៖ ${address}</div>
+            </div>
+            <div>
+               
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>ល.រ</th>
+                <th>ឈ្មោះទំនិញ</th>
+                <th>ទំងន់</th>
+                <th>ចំនួន</th>
+                <th>តម្លៃ</th>
+                <th>ឈ្នូល</th>
+                <th>លក់វិញ</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${orders.map((orderItem, index) => `
                 <tr>
-                  <th>ល.រ</th>
-                  <th>ឈ្មោះទំនិញ</th>
-                  <th>ទម្ងន់</th>
-                  <th>ចំនួន</th>
-                  <th>តម្លៃ</th>
-                  <th>តម្លៃកម្មាល</th>
-                  <th>តម្លៃទិញ</th>
+                  <td>${index + 1}</td>
+                  <td>${orderItem.product.prod_name}</td>
+                  <td>${orderItem.product.order_weight}</td>
+                  <td>${orderItem.product.order_amount}</td>
+                  <td>${orderItem.product.product_sell_price}</td>
+                  <td>${orderItem.product.product_labor_cost}</td>
+                  <td>${orderItem.product.product_buy_price}</td>
+                  
                 </tr>
-              </thead>
-              <tbody>
-                ${orders.map((orderItem, index) => `
-                  <tr>
-                    <td>${index + 1}</td>
-                    <td>${orderItem.product.prod_name}</td>
-                    <td>${orderItem.product.order_weight}</td>
-                    <td>${orderItem.product.order_amount}</td>
-                    <td>${orderItem.product.product_sell_price}</td>
-                    <td>${orderItem.product.product_labor_cost}</td>
-                    <td>${orderItem.product.product_buy_price}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
+              `).join('')}
+            </tbody>
+          </table>
 
-            <table class="total-section">
-              <tr><td>សរុប</td><td>${calculateTotal(orders)}</td></tr>
-              <tr><td>កក់មុន</td><td>${orders[0].order_deposit}</td></tr>
-              <tr><td>នៅខ្វះ</td><td>${calculateTotal(orders) - orders[0].order_deposit}</td></tr>
-            </table>
+          <table class="total-section">
+            <tr><td>សរុប</td><td>${calculateTotal(orders)}</td></tr>
+            <tr><td>កក់មុន</td><td>${orders[0].order_deposit}</td></tr>
+            <tr><td>នៅខ្វះ</td><td>${calculateTotal(orders) - orders[0].order_deposit}</td></tr>
+          </table>
 
-            <div class="signatures">
-              <div class="signature-box">
-                <div class="signature-line"></div>
-                <div>ហត្ថលេខាអ្នកទិញ</div>
-              </div>
-              <div class="signature-box">
-                <div class="signature-line"></div>
-                <div>ហត្ថលេខាអ្នកលក់</div>
-              </div>
-            </div>
-          </body>
+          <div class="signatures">
+            <div>ហត្ថលេខាអ្នកទិញ</div>
+            <div>ហត្ថលេខាអ្នកលក់</div>
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+              window.close();
+            };
+          </script>
+        </body>
         </html>
-      `;
+      `);
+        printWindow.document.close();
+
+    } catch (error) {
+        console.error("Error fetching order details:", error);
+        setResponseMessage("Failed to fetch order details.");
     }
   };
 
-  // Effects
-  useEffect(() => {
-    const initializeForm = async () => {
-      const token = getAuthToken();
-      if (!token) return;
-
-      try {
-        const [clientId, orderId] = await Promise.all([
-          apiService.fetchNextClientId(token),
-          apiService.fetchNextOrderId(token),
-        ]);
-
-        if (clientId) setNextClientId(clientId);
-        if (orderId) setOrderId(orderId);
-      } catch (error) {
-        console.error("Error initializing form:", error);
-        setResponseMessage(handleApiError(error));
+  // ✅ Fixed `calculateTotal` function
+  const calculateTotal = (orders) => {
+      if (!Array.isArray(orders) || orders.length === 0) {
+          return 0;
       }
+
+      return orders.reduce((total, orderItem) => 
+          total + (orderItem.product.order_amount * orderItem.product.product_sell_price) + orderItem.product.product_labor_cost, 0);
+  };
+                                                          
+
+  
+    
+  // Add a new product row
+  const addProduct = () => {
+    console.log("Adding a new product row");
+    setOrderProductDetail((prev) => [
+      ...prev,
+      {
+        customer_id:0,
+        prod_id: 0,
+        prod_name: "",
+        order_weight: "",
+        order_amount: 0,
+        product_sell_price: 0,
+        product_labor_cost: 0,
+        product_buy_price: 0,
+      },
+    ]);
+  };
+  
+  const deleteRow = (index: number) => {
+    setOrderProductDetail((prev) => prev.filter((_, i) => i !== index));
+  };
+  
+  // Calculate Total Price
+  const calculateTotalPrice = (): number => {
+    return orderProductDetail.reduce((total, product) => {
+      return total + product.product_labor_cost + product.order_amount * product.product_sell_price;
+    }, 0);
+  };
+
+  // Cancel Order
+  const cancelOrder = async () => {
+    console.log("Cancelling order and resetting fields...");
+    
+    // Clear all fields and reset
+    setCustomerName("");
+    setAddress("");
+    setPhoneNumber("");
+    setInvoiceNumber("");
+    setOrderDate("");
+    setOrderDeposit(0);
+    setResponseMessage("ការបញ្ជាទឹញត្រូវបានបោះបង់");
+    
+    setOrderProductDetail([
+      {
+        customer_id: 0,
+        prod_id: 0,
+        prod_name: "",
+        order_weight: "",
+        order_amount: 0,
+        product_sell_price: 0,
+        product_labor_cost: 0,
+        product_buy_price: 0,
+      },
+    ]);
+  
+    try {
+      //  Fetch and set the next Client ID
+      const newClientId = await fetchNextClientId();
+      if (newClientId) {
+        setCustomerId(newClientId);
+        console.log(" Updated Customer ID:", newClientId);
+      } else {
+        console.warn(" No new Client ID fetched.");
+      }
+  
+      //  Fetch and set the next Order ID
+      const newOrderId = await fetchNextOrderId();
+      if (newOrderId) {
+        setOrderId(newOrderId);
+        console.log(" Updated Order ID:", newOrderId);
+      } else {
+        console.warn(" No new Order ID fetched.");
+      }
+  
+      console.log(" Canceled and updated with new IDs:", { newClientId, newOrderId });
+    } catch (error) {
+      console.error(" Error fetching next IDs:", error);
+    }
+  };
+  
+  
+
+  const handleSubmit = async () => {
+    const idToSubmit = (customerId ? String(customerId).trim() : "") || nextClientId;
+
+    if (!idToSubmit || !customerName.trim() || !phoneNumber.trim() || !address.trim()) {
+        setResponseMessage("សូមត្រួតពិនិត្យឡើងវិញ");
+        return;
+    }
+
+    if (
+        orderProductDetail.length === 0 ||
+        orderProductDetail.some(
+            (product) =>
+                !product.prod_name.trim() ||
+                !product.order_weight.trim() ||
+                product.order_amount <= 0 ||
+                product.product_sell_price <= 0
+        )
+    ) {
+        setResponseMessage("Please add at least one valid product with all fields filled.");
+        return;
+    }
+
+    // ✅ Include order_id if it's provided (for updating an existing order)
+    const payload = {
+        order_id: orderId || null, // Use existing order ID if available, otherwise null
+        cus_id: idToSubmit,
+        cus_name: customerName,
+        address: address,
+        phone_number: phoneNumber,
+        invoice_number: invoiceNumber || "N/A",
+        order_date: orderDate || "N/A",
+        order_deposit: orderDeposit,
+        order_product_detail: [...orderProductDetail], // Ensure reference to prevent modification
     };
 
-    initializeForm();
-  }, []);
+    console.log("🔹 Sending Create Order Request:", JSON.stringify(payload, null, 2)); // Log the payload
 
-  // Product Management Functions
+    try {
+        const token = localStorage.getItem("access_token");
+        if (!token) {
+            setResponseMessage("Authentication failed. Please log in.");
+            return;
+        }
+
+        const response = await fetch("http://127.0.0.1:8000/staff/order", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`,
+            },
+            body: JSON.stringify(payload),
+        });
+
+        console.log("🔹 Response Status:", response.status); // Log response status
+
+        const responseData = await response.json();
+        console.log("🔹 API Response:", responseData);
+
+        if (response.ok) {
+            setResponseMessage(responseData.message || "ផលិតផលបានរក្សាទុកដោយជោគជ័យ");
+            
+            // ✅ Store the order ID after creation (if it's a new order)
+            if (!orderId) {
+                setOrderId(responseData.order_id); // Set order ID if a new order was created
+            }
+
+        } else {
+            setResponseMessage(responseData.message || "សូមត្រួតពិនិត្យឡើងវិញ");
+        }
+    } catch (error) {
+        console.error("Network Error:", error);
+        setResponseMessage("Failed to connect to the server. Please check your connection.");
+    }
+};
+
+
+  
+  useEffect(() => {
+    const fetchNextIds = async () => {
+      setLoading(true);
+  
+      try {
+        // Fetch Client ID
+        const newClientId = await fetchNextClientId();
+        if (newClientId) setCustomerId(newClientId);
+  
+        // Fetch Order ID
+        const newOrderId = await fetchNextOrderId();
+        if (newOrderId) setOrderId(newOrderId);
+        
+      } catch (error) {
+        console.error("Error fetching next IDs:", error);
+      } finally {
+        setLoading(false); // Stop loading after fetching
+      }
+    };
+  
+    fetchNextIds();
+  }, []); 
+  
   const updateProduct = (index: number, field: string, value: string | number) => {
     setOrderProductDetail((prev) =>
       prev.map((product, i) =>
@@ -384,215 +444,11 @@ export default function BuySellRecord() {
           ? {
               ...product,
               [field]: value || "",
+              
             }
           : product
       )
     );
-  };
-
-  // Order Management Functions
-  const cancelOrder = async () => {
-    console.log("Cancelling order and resetting fields...");
-    formHandlers.resetForm();
-    
-    try {
-      const newClientId = await apiService.fetchNextClientId(getAuthToken() as string);
-      const newOrderId = await apiService.fetchNextOrderId(getAuthToken() as string);
-
-      if (newClientId) {
-        setCustomerId(newClientId);
-      }
-      if (newOrderId) {
-        setOrderId(newOrderId);
-      }
-
-      setResponseMessage("ការបញ្ជាទិញត្រូវបានបោះបង់");
-    } catch (error) {
-      console.error("Error fetching next IDs:", error);
-      setResponseMessage(handleApiError(error));
-    }
-  };
-
-  const handleSubmit = async () => {
-    const token = getAuthToken();
-    if (!token) {
-      setResponseMessage("Authentication failed. Please log in.");
-      return;
-    }
-
-    const payload = {
-      order_id: orderId || null,
-      cus_id: customerId || nextClientId,
-      cus_name: customerName,
-      address: address,
-      phone_number: phoneNumber,
-      invoice_number: invoiceNumber || "N/A",
-      order_date: orderDate || "N/A",
-      order_deposit: orderDeposit,
-      order_product_detail: [...orderProductDetail],
-    };
-
-    try {
-      const response = await fetch(`${BASE_URL}/order`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json();
-      if (response.ok) {
-        setResponseMessage("ការបញ្ជាទិញត្រូវបានបញ្ចូលដោយជោគជ័យ");
-        formHandlers.resetForm();
-        const [newClientId, newOrderId] = await Promise.all([
-          apiService.fetchNextClientId(token),
-          apiService.fetchNextOrderId(token),
-        ]);
-        setNextClientId(newClientId || "");
-        setOrderId(newOrderId);
-      } else {
-        throw new Error(data.detail || "Failed to create order");
-      }
-    } catch (error) {
-      setResponseMessage(handleApiError(error));
-    }
-  };
-
-  const validateForm = (idToSubmit: string): boolean => {
-    if (!idToSubmit || !customerName.trim() || !phoneNumber.trim() || !address.trim()) {
-      setResponseMessage("សូមត្រួតពិនិត្យឡើងវិញ");
-      return false;
-    }
-
-    if (
-      orderProductDetail.length === 0 ||
-      orderProductDetail.some(
-        (product) =>
-          !product.prod_name.trim() ||
-          !product.order_weight.trim() ||
-          product.order_amount <= 0 ||
-          product.product_sell_price <= 0
-      )
-    ) {
-      setResponseMessage("Please add at least one valid product with all fields filled.");
-      return false;
-    }
-
-    return true;
-  };
-
-  const handleSubmitSuccess = async (responseData: any) => {
-    setResponseMessage("ការបញ្ជាទិញត្រូវបានរក្សាទុក");
-    
-    const newClientId = await apiService.fetchNextClientId(getAuthToken() as string);
-    const newOrderId = await apiService.fetchNextOrderId(getAuthToken() as string);
-    
-    if (newClientId) setCustomerId(newClientId);
-    if (newOrderId) setOrderId(newOrderId);
-    
-    formHandlers.resetForm();
-  };
-
-  // Print Functions
-  const handlePrint = async (orderId: number) => {
-    if (!orderId || isNaN(orderId)) {
-      setResponseMessage("Please enter a valid Order ID.");
-      return;
-    }
-
-    const token = getAuthToken();
-    if (!token) {
-      setResponseMessage("Authentication failed. Please log in.");
-      return;
-    }
-
-    try {
-      const orderData = await apiService.fetchOrderDetails(orderId, token);
-      if (!orderData) {
-        setResponseMessage("No order details found.");
-        return;
-      }
-      invoiceHandlers.generateInvoice(orderData, orderId);
-    } catch (error) {
-      setResponseMessage(handleApiError(error));
-    }
-  };
-
-  // API Functions
-  const fetchNextClientId = async () => {
-    try {
-      console.log("Fetching next client ID...");
-      const token = getAuthToken();
-      if (!token) {
-        console.error("No authentication token found. User may not be logged in.");
-        return null;
-      }
-
-      const response = await fetch(`${BASE_URL}/next-client-id`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        console.error(`Failed to fetch next client ID. Status: ${response.status}`);
-        return null;
-      }
-
-      const data = await response.json();
-      console.log("API Response (Next Client ID):", data);
-
-      if (data?.result?.id !== undefined) {
-        return data.result.id; //  Return the fetched Client ID
-      } else {
-        console.error("Unexpected API response format:", data);
-        return null;
-      }
-    } catch (error) {
-      console.error("Error fetching next client ID:", error);
-      return null;
-    }
-  };
-
-  const fetchNextOrderId = async () => {
-    try {
-      console.log("Fetching next order ID...");
-      const token = getAuthToken();
-      if (!token) {
-        console.error("No authentication token found. User may not be logged in.");
-        return null;
-      }
-
-      const response = await fetch(`${BASE_URL}/next-order-id`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        console.error(`API request failed. Status: ${response.status}`);
-        return null;
-      }
-
-      const data = await response.json();
-      console.log("API Response (Next Order ID):", data);
-
-      if (data?.result?.id !== undefined) {
-        return data.result.id; //  Return the fetched Order ID
-      } else {
-        console.error("Unexpected API response format:", data);
-        return null;
-      }
-    } catch (error) {
-      console.error("Error fetching next order ID:", error);
-      return null;
-    }
   };
 
   const searchByPhoneNumber = async () => {
@@ -600,16 +456,16 @@ export default function BuySellRecord() {
       setResponseMessage("Please enter a phone number to search.");
       return;
     }
-
-    const token = getAuthToken();
+  
+    const token = localStorage.getItem("access_token");
     if (!token) {
       setResponseMessage("Authentication failed. Please log in.");
       return;
     }
-
-    const url = `${BASE_URL}/order/client_phone?phone_number=${phoneNumber}`;
+  
+    const url = `http://127.0.0.1:8000/staff/order/client_phone?phone_number=${phoneNumber}`;
     console.log("Fetching from API:", url);
-
+  
     try {
       const response = await fetch(url, {
         method: "GET",
@@ -618,38 +474,39 @@ export default function BuySellRecord() {
           "Authorization": `Bearer ${token}`,
         },
       });
-
+  
       console.log("API Response Status:", response.status);
-
+  
       if (response.status === 403) {
         setResponseMessage("Access denied. Please check your permissions.");
         return;
       }
-
+  
       if (!response.ok) {
         setResponseMessage("មិនមានអតិថិជន");
+        
         setCustomerName("");
         setAddress("");
         const newClientId = await fetchNextClientId();
-        if (newClientId) {
-          setCustomerId(newClientId);
-          console.log("Updated Customer ID:", newClientId);
-        } else {
-          console.warn("No new Client ID fetched.");
-        }
+          if (newClientId) {
+            setCustomerId(newClientId);
+            console.log(" Updated Customer ID:", newClientId);
+          } else {
+            console.warn(" No new Client ID fetched.");
+          }
         return;
       }
-
+   
       const data = await response.json();
       console.log("Fetched Customer Data:", data);
-
+  
       if (data.code === 200 && data.result.length > 0) {
         const customer = data.result[0]; // Extract the first (or only) customer record
-
+  
         setCustomerName(customer.cus_name || ""); // Set customer name
         setAddress(customer.address || ""); // Set address
         setCustomerId(customer.cus_id || ""); // Set customer ID (now last)
-
+  
         setResponseMessage("ស្វែងរកជោគជ័យ");
       } else {
         setResponseMessage("មិនមានអតិថិជន");
@@ -662,36 +519,37 @@ export default function BuySellRecord() {
       setResponseMessage("Failed to fetch customer details.");
     }
   };
+  
 
   const handleUpdateOrder = async () => {
     if (!phoneNumber.trim()) {
-      console.warn("Phone number is missing, switching to order creation...");
+      console.warn(" Phone number is missing, switching to order creation...");
       await handleSubmit(); //  If no phone, create order
       return;
     }
-
-    const token = getAuthToken();
+  
+    const token = localStorage.getItem("access_token");
     if (!token) {
-      setResponseMessage("Authentication failed. Please log in.");
+      setResponseMessage(" Authentication failed. Please log in.");
       return;
     }
-
+  
     //  Fetch order_id using phone number
     const orderId = await fetchOrderIdByPhone();
-
+  
     if (!orderId) {
-      console.warn("Order not found, switching to order creation...");
+      console.warn(" Order not found, switching to order creation...");
       await handleSubmit(); //  No order found? Create a new one
       return;
     }
-
+  
     //  Check if order has products (to prevent updating an empty order)
     if (!orderProductDetail.length || orderProductDetail.every(p => !p.prod_name.trim())) {
-      console.warn("No products found in the order, switching to creation...");
+      console.warn(" No products found in the order, switching to creation...");
       await handleSubmit(); //  If no valid products, create a new order instead
       return;
     }
-
+  
     const updatedOrder = {
       order_id: orderId, 
       cus_name: customerName || "",
@@ -709,11 +567,11 @@ export default function BuySellRecord() {
         product_buy_price: product.product_buy_price || 0,
       })),
     };
-
-    console.log("Sending Update Request:", updatedOrder);
-
+  
+    console.log("🔹 Sending Update Request:", updatedOrder);
+  
     try {
-      const response = await fetch(`${BASE_URL}/orders/${orderId}`, {
+      const response = await fetch(`http://127.0.0.1:8000/staff/orders/${orderId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -721,33 +579,36 @@ export default function BuySellRecord() {
         },
         body: JSON.stringify(updatedOrder),
       });
-
+  
       const data = await response.json();
-      console.log("API Response:", data);
-
+      console.log("🔹 API Response:", data);
+  
       if (response.ok) {
-        setResponseMessage("Order updated successfully!");
+        setResponseMessage(" Order updated successfully!");
         setIsEditing(false); //  Exit edit mode after success
       } else {
-        console.warn("Failed to update order, switching to create...");
+        console.warn(" Failed to update order, switching to create...");
         await handleSubmit(); //  If update fails, try creating instead
       }
     } catch (error) {
-      console.error("Error updating order:", error);
-      setResponseMessage("Error updating order. Please try again.");
+      console.error(" Error updating order:", error);
+      setResponseMessage(" Error updating order. Please try again.");
     }
   };
-
+  
+  
+  
+  
   const fetchOrderIdByPhone = async () => {
     try {
-      const response = await fetch(`${BASE_URL}/order?phone_number=${phoneNumber}`, {
+      const response = await fetch(`http://127.0.0.1:8000/staff/order?phone_number=${phoneNumber}`, {
         method: "GET",
         headers: {
-          "Authorization": `Bearer ${getAuthToken()}`,
+          "Authorization": `Bearer ${localStorage.getItem("access_token")}`,
           "Content-Type": "application/json",
         },
       });
-
+  
       const data = await response.json();
       if (response.ok && data.result.length > 0) {
         return data.result[0].order_id; //  Extract `order_id` from the first order found
@@ -755,8 +616,86 @@ export default function BuySellRecord() {
         return null;
       }
     } catch (error) {
-      console.error("Error fetching order ID:", error);
+      console.error(" Error fetching order ID:", error);
       return null;
+    }
+  };
+  
+  
+
+  const fetchNextOrderId = async () => {
+    try {
+        console.log("Fetching next order ID...");
+        const token = localStorage.getItem("access_token");
+        if (!token) {
+            console.error("No authentication token found. User may not be logged in.");
+            return null;
+        }
+  
+        const response = await fetch("http://127.0.0.1:8000/staff/next-order-id", {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`,
+            },
+        });
+  
+        if (!response.ok) {
+            console.error(`API request failed. Status: ${response.status}`);
+            return null;
+        }
+  
+        const data = await response.json();
+        console.log("API Response (Next Order ID):", data);
+  
+        if (data?.result?.id !== undefined) {
+            return data.result.id; //  Return the fetched Order ID
+        } else {
+            console.error("Unexpected API response format:", data);
+            return null;
+        }
+    } catch (error) {
+        console.error("Error fetching next order ID:", error);
+        return null;
+    }
+  };
+  
+
+  
+  const fetchNextClientId = async () => {
+    try {
+        console.log("Fetching next client ID...");
+        const token = localStorage.getItem("access_token");
+        if (!token) {
+            console.error("No authentication token found. User may not be logged in.");
+            return null;
+        }
+  
+        const response = await fetch("http://127.0.0.1:8000/staff/next-client-id", {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`,
+            },
+        });
+  
+        if (!response.ok) {
+            console.error(`Failed to fetch next client ID. Status: ${response.status}`);
+            return null;
+        }
+  
+        const data = await response.json();
+        console.log("API Response (Next Client ID):", data);
+  
+        if (data?.result?.id !== undefined) {
+            return data.result.id; //  Return the fetched Client ID
+        } else {
+            console.error("Unexpected API response format:", data);
+            return null;
+        }
+    } catch (error) {
+        console.error("Error fetching next client ID:", error);
+        return null;
     }
   };
 
@@ -892,7 +831,7 @@ export default function BuySellRecord() {
 
         <div className="flex justify-center items-center h-20">
           <button
-            onClick={formHandlers.addProduct}
+            onClick={addProduct}
             className="bg-gray-500 text-white py-2 px-4 rounded hover:bg-green-600"
           >
             បន្ថែមផលិតផល
@@ -932,33 +871,6 @@ export default function BuySellRecord() {
               placeholder="ឈ្មោះ"
             />
           </td>
-          {/* <td className="border border-gray-300 p-2 flex w-24">
-           
-            <input
-              type="number"
-              value={(product.order_weight || "").toString().replace(/\D/g, "0")} 
-              onChange={(e) => {
-                const numericPart = e.target.value.replace(/\D/g, ""); 
-                const unitPart = (product.order_weight || "").toString().replace(/\d/g, "") || "";
-                updateProduct(index, "order_weight", `${numericPart}${unitPart}`);
-              }}
-              className="w-2/4 p-1 bg-transparent border-none focus:outline-none focus:ring-0 text-right"
-              placeholder="0"
-            />
-           
-            <input
-              type="text"
-              value={(product.order_weight || "").toString().replace(/\d/g, "")} 
-              onChange={(e) => {
-                const unitPart = e.target.value.replace(/\d/g, "");
-                const numericPart = (product.order_weight || "").toString().match(/\d+/)?.[0] || ""; 
-                updateProduct(index, "order_weight", `${numericPart}${unitPart}`);
-              }}
-              className="w-2/4 p-1 bg-transparent border-none focus:outline-none focus:ring-0 text-left"
-              placeholder=""
-            />
-          </td> */}
-
           <td className="border border-gray-300 p-2">
             <input
               type="text"
@@ -968,55 +880,57 @@ export default function BuySellRecord() {
               placeholder="0"
             />
           </td>
-
           <td className="border border-gray-300 p-2">
-  <input
-    type="number"
-    value={product.order_amount}
-    onChange={(e) =>
-      updateProduct(index, "order_amount", parseInt(e.target.value) || 0)
-    }
-    className="w-full p-1 bg-transparent border-none focus:outline-none focus:ring-0 placeholder-gray-400 placeholder-opacity-50"
-    placeholder="0"
-  />
-</td>
-<td className="border border-gray-300 p-2">
-  <input
-    type="number"
-    value={product.product_sell_price}
-    onChange={(e) =>
-      updateProduct(index, "product_sell_price", parseFloat(e.target.value) || 0)
-    }
-    className="w-full p-1 bg-transparent border-none focus:outline-none focus:ring-0 placeholder-gray-400 placeholder-opacity-50"
-    placeholder="0.00"
-  />
-</td>
-<td className="border border-gray-300 p-2">
-  <input
-    type="number"
-    value={product.product_labor_cost}
-    onChange={(e) =>
-      updateProduct(index, "product_labor_cost", parseFloat(e.target.value) || 0)
-    }
-    className="w-full p-1 bg-transparent border-none focus:outline-none focus:ring-0 placeholder-gray-400 placeholder-opacity-50"
-    placeholder="0.00"
-  />
-</td>
-<td className="border border-gray-300 p-2">
-  <input
-    type="number"
-    value={product.product_buy_price}
-    onChange={(e) =>
-      updateProduct(index, "product_buy_price", parseFloat(e.target.value) || 0)
-    }
-    className="w-full p-1 bg-transparent border-none focus:outline-none focus:ring-0 placeholder-gray-400 placeholder-opacity-50"
-    placeholder="0.00"
-  />
-</td>
-
+            <input
+              type="number"
+              value={product.order_amount === 0 ? "" : product.order_amount}
+              onChange={(e) => {
+                const value = e.target.value === "" ? 0 : parseInt(e.target.value);
+                updateProduct(index, "order_amount", value);
+              }}
+              className="w-full p-1 bg-transparent border-none focus:outline-none focus:ring-0 placeholder-gray-400 placeholder-opacity-50"
+              placeholder="0"
+            />
+          </td>
+          <td className="border border-gray-300 p-2">
+            <input
+              type="number"
+              value={product.product_sell_price === 0 ? "" : product.product_sell_price}
+              onChange={(e) => {
+                const value = e.target.value === "" ? 0 : parseFloat(e.target.value);
+                updateProduct(index, "product_sell_price", value);
+              }}
+              className="w-full p-1 bg-transparent border-none focus:outline-none focus:ring-0 placeholder-gray-400 placeholder-opacity-50"
+              placeholder="0"
+            />
+          </td>
+          <td className="border border-gray-300 p-2">
+            <input
+              type="number"
+              value={product.product_labor_cost === 0 ? "" : product.product_labor_cost}
+              onChange={(e) => {
+                const value = e.target.value === "" ? 0 : parseFloat(e.target.value);
+                updateProduct(index, "product_labor_cost", value);
+              }}
+              className="w-full p-1 bg-transparent border-none focus:outline-none focus:ring-0 placeholder-gray-400 placeholder-opacity-50"
+              placeholder="0"
+            />
+          </td>
+          <td className="border border-gray-300 p-2">
+            <input
+              type="number"
+              value={product.product_buy_price === 0 ? "" : product.product_buy_price}
+              onChange={(e) => {
+                const value = e.target.value === "" ? 0 : parseFloat(e.target.value);
+                updateProduct(index, "product_buy_price", value);
+              }}
+              className="w-full p-1 bg-transparent border-none focus:outline-none focus:ring-0 placeholder-gray-400 placeholder-opacity-50"
+              placeholder="0"
+            />
+          </td>
           <td className="border border-gray-300 p-2">
             <button
-              onClick={() => formHandlers.deleteRow(index)}
+              onClick={() => deleteRow(index)}
               className="bg-red-500 text-white py-1 px-3 rounded hover:bg-red-600"
             >
               លប់
@@ -1037,7 +951,7 @@ export default function BuySellRecord() {
     <input
       type="number"
       id="totalPrice"
-      value={formHandlers.calculateTotalPrice()}
+      value={calculateTotalPrice()}
       readOnly
       className="w-full border border-gray-300 p-2 rounded bg-gray-100"
     />
@@ -1051,14 +965,16 @@ export default function BuySellRecord() {
     <input
       type="number"
       id="orderDeposit"
-      value={orderDeposit}
-      onChange={(e) => setOrderDeposit(parseFloat(e.target.value))}
-      // className="w-full p-1 bg-transparent border-none focus:outline-none focus:ring-0 placeholder-gray-400 placeholder-opacity-50"
-      placeholder="0"
-      
-      
+      value={orderDeposit === 0 ? "" : orderDeposit}
+      onChange={(e) => {
+        // Handle empty input by setting to 0, otherwise parse as float
+        const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
+        setOrderDeposit(isNaN(value) ? 0 : value);
+      }}
       className="w-full border border-gray-300 p-2 rounded"
+      placeholder="0"
     />
+    
   </div>
 </div>
 

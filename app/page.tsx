@@ -6,7 +6,7 @@ export default function Home() {
         <img 
           src="/logo.png" 
           alt="Logo" 
-          className="h-32 w-auto object-contain"
+          className="h-48 w-auto object-contain" 
         />
       </div>
 
